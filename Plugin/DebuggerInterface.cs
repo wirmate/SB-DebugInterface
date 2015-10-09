@@ -44,7 +44,7 @@ namespace SmartBot.Plugins
         private void CommandHandlerOnCommandReceived(CommandHandler.CommandType command, string[] args)
         {
             if (command == CommandHandler.CommandType.CalculationRequest)
-                Debug.SimulateSeed(args[0], args[1], true, bool.Parse(args[2]));
+                Debug.SimulateSeed(args[0], args[1], true);
         }
 
         private void DebugOnOnLogReceived(string str)
