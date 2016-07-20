@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.IO.Pipes;
 using System.Linq;
 using System.Text;
@@ -71,6 +72,11 @@ namespace SmartBot.Plugins
         {
             PipeServer.Close();
         }
+
+        public override void Dispose()
+        {
+            PipeServer.Close();
+        }
     }
 
     public static class CommandHandler
@@ -86,7 +92,7 @@ namespace SmartBot.Plugins
             BoardAfterActions
         }
 
-        public static char MessageSeparator = ((char) 007);
+        public static char MessageSeparator = (char) 007;
         public static event OnCommandProcessingDelegate OnCommandReceived;
 
         public static void SetupEvents()
@@ -98,7 +104,7 @@ namespace SmartBot.Plugins
         {
             if (!PipeServer.Connected) return;
 
-            List<string> argsToSend = new List<string> {command.ToString()};
+            var argsToSend = new List<string> {command.ToString()};
             argsToSend.AddRange(args);
 
             PipeServer.SendMessage(string.Join(MessageSeparator.ToString(), argsToSend));
@@ -108,14 +114,16 @@ namespace SmartBot.Plugins
         {
             try
             {
-                string[] splitParts = msg.Split(MessageSeparator);
-                CommandType type = (CommandType) Enum.Parse(typeof (CommandType), splitParts[0]);
-                string[] args = splitParts.ToList().GetRange(1, splitParts.Length - 1).ToArray();
+                var splitParts = msg.Split(MessageSeparator);
+                var type = (CommandType) Enum.Parse(typeof (CommandType), splitParts[0]);
+                var args = splitParts.ToList().GetRange(1, splitParts.Length - 1).ToArray();
 
                 if (OnCommandReceived != null)
                     OnCommandReceived(type, args);
             }
-            catch {}
+            catch
+            {
+            }
         }
     }
 
@@ -152,7 +160,14 @@ namespace SmartBot.Plugins
                     CloseClient();
                     _client = new NamedPipeServerStream("SmartBotDebuggerPipe", PipeDirection.InOut, 2,
                         PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-                    _client.WaitForConnection();
+                    try
+                    {
+                        _client.WaitForConnection();
+                    }
+                    catch (IOException ex)
+                    {
+                        //Pipe disconnected
+                    }
                     BeginReceiveHeader();
                 }
             }
@@ -170,7 +185,7 @@ namespace SmartBot.Plugins
                         try
                         {
                             _client.EndRead(ar);
-                            int msgSize = BitConverter.ToInt32(((byte[]) ar.AsyncState), 0);
+                            var msgSize = BitConverter.ToInt32((byte[]) ar.AsyncState, 0);
                             BeginReceiveMessage(msgSize);
                         }
                         catch
@@ -198,7 +213,7 @@ namespace SmartBot.Plugins
                         try
                         {
                             _client.EndRead(ar);
-                            string message = Encoding.Unicode.GetString((byte[]) ar.AsyncState);
+                            var message = Encoding.Unicode.GetString((byte[]) ar.AsyncState);
                             HandleMessage(message);
 
                             BeginReceiveHeader();
@@ -236,8 +251,8 @@ namespace SmartBot.Plugins
         {
             if (_client != null)
             {
-                byte[] bytesSize = BitConverter.GetBytes(bytes.Length);
-                byte[] bytesToSend = new byte[bytes.Length + sizeof (int)];
+                var bytesSize = BitConverter.GetBytes(bytes.Length);
+                var bytesToSend = new byte[bytes.Length + sizeof (int)];
 
                 Buffer.BlockCopy(bytesSize, 0, bytesToSend, 0, bytesSize.Length);
                 Buffer.BlockCopy(bytes, 0, bytesToSend, sizeof (int), bytes.Length);
@@ -259,7 +274,8 @@ namespace SmartBot.Plugins
         {
             if (_client != null)
             {
-                _client.Disconnect();
+                if (_client.IsConnected)
+                    _client.Disconnect();
                 _client.Dispose();
                 _client = null;
             }
